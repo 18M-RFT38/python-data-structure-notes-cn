@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python 汉诺塔 (Tower of Hanoi) 递归调用单步可视化</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* 代码行高亮动画 */
+        .code-line {
+            transition: all 0.15s ease;
+        }
+        .line-active {
+            background: linear-gradient(90deg, rgba(16, 185, 129, 0.28) 0%, rgba(16, 185, 129, 0.05) 100%);
+            border-left: 4px solid #10b981;
+        }
+        .line-waiting-step1 {
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0.02) 100%);
+            border-left: 4px solid #f59e0b;
+        }
+        .line-waiting-step3 {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.18) 0%, rgba(59, 130, 246, 0.02) 100%);
+            border-left: 4px solid #3b82f6;
+        }
+        .line-return {
+            background: linear-gradient(90deg, rgba(244, 63, 94, 0.25) 0%, rgba(244, 63, 94, 0.05) 100%);
+            border-left: 4px solid #f43f5e;
+        }
+
+        /* 调用栈卡片动画 */
+        .stack-card {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stack-card-active {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+            transform: translateY(-2px);
+        }
+
+        /* 按钮光效 */
+        .btn-primary-glow {
+            box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.39);
+        }
+        .btn-primary-glow:hover {
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col select-none">
+
+    <!-- 顶部导航与核心设置栏 -->
+    <header class="bg-slate-900/90 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-lg shadow-inner">
+                🗼
+            </div>
+            <div>
+                <h1 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                    Python 汉诺塔递归单步可视化调试器
+                    <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">同款三栏 + 调用栈透视</span>
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">每走一步自动暂停 · 直观展示「参数角色互换」与「第4行 / 第6行挂起恢复」全过程</p>
+            </div>
+        </div>
+
+        <!-- 盘子数量切换 & 核心原理弹窗 -->
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div class="flex items-center bg-slate-800/90 p-1 rounded-lg border border-slate-700 text-xs">
+                <span class="px-2 text-slate-400 font-medium">盘子层数:</span>
+                <button onclick="changeDiskCount(2)" id="disk-btn-2" class="px-2.5 py-1 rounded-md transition font-mono-code text-slate-300 hover:text-white">
+                    n=2 <span class="text-[10px] opacity-75">(极简3步移动)</span>
+                </button>
+                <button onclick="changeDiskCount(3)" id="disk-btn-3" class="px-2.5 py-1 rounded-md transition font-mono-code bg-emerald-600 text-white font-semibold shadow">
+                    n=3 <span class="text-[10px] opacity-90">(经典7步移动)</span>
+                </button>
+                <button onclick="changeDiskCount(4)" id="disk-btn-4" class="px-2.5 py-1 rounded-md transition font-mono-code text-slate-300 hover:text-white">
+                    n=4 <span class="text-[10px] opacity-75">(进阶15步移动)</span>
+                </button>
+            </div>
+
+            <button onclick="toggleHelpModal()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition">
+                <span>💡</span> 为什么汉诺塔的 A、B、C 老是换位置？
+            </button>
+        </div>
+    </header>
+
+    <!-- 第一部分：顶部【调用栈顺序 (Call Stack)】 -->
+    <section class="bg-slate-900/60 border-b border-slate-800 px-4 py-2.5">
+        <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    上方：当前递归调用栈顺序 (Call Stack)
+                </span>
+                <span class="text-xs text-slate-400 hidden md:inline">— 从左到右依次为「最外层总任务 ➔ 当前正在执行的最深层子任务」</span>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+                <span class="flex items-center gap-1 text-slate-400">
+                    <span class="w-2.5 h-2.5 rounded-sm bg-emerald-500/30 border border-emerald-400 inline-block"></span> 当前执行层
+                </span>
+                <span class="flex items-center gap-1 text-slate-400">
+                    <span class="w-2.5 h-2.5 rounded-sm bg-amber-500/30 border border-amber-400 inline-block"></span> 停在第4行(等上面n-1个移走)
+                </span>
+                <span class="flex items-center gap-1 text-slate-400">
+                    <span class="w-2.5 h-2.5 rounded-sm bg-blue-500/30 border border-blue-400 inline-block"></span> 停在第6行(等上面n-1个归位)
+                </span>
+            </div>
+        </div>
+
+        <!-- 调用栈横向容器 -->
+        <div id="call-stack-container" class="flex items-center gap-2 overflow-x-auto py-1.5 min-h-[72px]">
+            <!-- 由 JS 动态渲染栈帧卡片 -->
+        </div>
+    </section>
+
+    <!-- 主体三栏内容区 -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 max-w-[1920px] w-full mx-auto">
+
+        <!-- 左侧栏：完整代码视图 (占 4 列) -->
+        <section class="lg:col-span-4 bg-slate-900 rounded-xl border border-slate-800 flex flex-col overflow-hidden shadow-lg">
+            <div class="bg-slate-800/70 px-3.5 py-2.5 border-b border-slate-700/80 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-400/80"></span>
+                    <h2 class="text-sm font-bold text-white">左边：完整代码全局执行位置</h2>
+                </div>
+                <span class="text-[11px] text-slate-400 font-mono-code">hanoi_tower.py</span>
+            </div>
+
+            <!-- 代码说明条 -->
+            <div class="px-3.5 py-1.5 bg-slate-950/60 border-b border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
+                <span>🟢 绿条：正在执行的行</span>
+                <span>🟡/🔵 虚框：外层递归暂停等待的位置</span>
+            </div>
+
+            <!-- 完整代码列表 -->
+            <div id="full-code-container" class="flex-1 overflow-y-auto py-2 font-mono-code text-xs sm:text-[13px] leading-relaxed select-text">
+                <!-- 由 JS 渲染代码行 -->
+            </div>
+
+            <!-- 左下角：已完成的盘子移动记录日志 -->
+            <div class="border-t border-slate-800 bg-slate-950/70 flex flex-col h-44">
+                <div class="px-3.5 py-1.5 border-b border-slate-800/80 flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-300 flex items-center gap-1.5">
+                        <span>📜</span> 终端输出记录 (print 移动日志)
+                    </span>
+                    <span id="move-count-badge" class="font-mono-code text-emerald-400 font-semibold">已移动: 0 步</span>
+                </div>
+                <div id="move-log-container" class="flex-1 overflow-y-auto p-2.5 space-y-1 font-mono-code text-xs">
+                    <!-- 由 JS 动态渲染移动日志 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 中间栏：汉诺塔画布 + 单步控制器 + 详细解说 (占 4 列) -->
+        <section class="lg:col-span-4 flex flex-col gap-3">
+            
+            <!-- 当前步骤大白话解说卡片 -->
+            <div id="step-explanation-card" class="bg-slate-900 rounded-xl border border-slate-700/90 p-3.5 shadow-lg relative overflow-hidden">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span id="step-badge" class="px-2.5 py-0.5 rounded-md text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono-code">
+                            步骤 0 / 0
+                        </span>
+                        <span id="step-phase-tag" class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                            准备开始
+                        </span>
+                    </div>
+                    <span id="current-focus-disk" class="text-xs font-mono-code text-amber-300">
+                        当前层目标盘: --
+                    </span>
+                </div>
+                <div id="step-explanation-text" class="text-sm text-slate-100 leading-relaxed min-h-[54px] flex items-center">
+                    点击下方绿色的「下一步 / 继续」按钮（或按键盘空格键），开始一步步观察汉诺塔的压栈与移动过程！
+                </div>
+            </div>
+
+            <!-- 汉诺塔可视化画布容器 -->
+            <div class="flex-1 bg-slate-900 rounded-xl border border-slate-800 flex flex-col overflow-hidden shadow-lg min-h-[310px] relative">
+                <!-- 画布顶部状态小条 -->
+                <div class="bg-slate-800/70 px-3.5 py-2 border-b border-slate-700/80 flex items-center justify-between z-10">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm">🗼</span>
+                        <h2 class="text-xs sm:text-sm font-bold text-white">汉诺塔实时状态画布 (Hanoi Canvas)</h2>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs">
+                        <label class="flex items-center gap-1.5 cursor-pointer text-slate-300 hover:text-white">
+                            <input type="checkbox" id="toggle-role-tags" checked onchange="renderAll()" class="rounded bg-slate-700 border-slate-600 text-emerald-500 focus:ring-0">
+                            <span>显示当前层 source/aux/target 角色牌</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 画布本体 -->
+                <div id="canvas-wrapper" class="flex-1 relative bg-[#0b1120] flex items-center justify-center overflow-hidden">
+                    <canvas id="hanoi-canvas" class="w-full h-full block"></canvas>
+
+                    <!-- 左上角浮层：当前递归帧任务简报 -->
+                    <div class="absolute top-2.5 left-2.5 bg-slate-900/90 backdrop-blur-md text-slate-100 px-3 py-2 rounded-lg border border-slate-700/80 text-xs shadow-md pointer-events-none space-y-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400">当前栈顶调用:</span>
+                            <span id="hud-call" class="font-bold font-mono-code text-emerald-300">未进入</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400">本层负责底盘:</span>
+                            <span id="hud-disk" class="font-mono-code text-amber-300">--</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-400">本层搬运方向:</span>
+                            <span id="hud-direction" class="font-mono-code text-sky-300">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部单步控制面板 -->
+            <div class="bg-slate-900 rounded-xl border border-slate-800 p-3.5 shadow-lg space-y-3">
+                <!-- 进度条 -->
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-mono-code text-slate-400 w-12 text-right" id="slider-cur-label">0</span>
+                    <input type="range" id="step-slider" min="0" max="100" value="0" oninput="onSliderChange(this.value)" 
+                        class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                    <span class="text-xs font-mono-code text-slate-400 w-12" id="slider-max-label">100</span>
+                </div>
+
+                <!-- 主控制按钮组 -->
+                <div class="grid grid-cols-12 gap-2">
+                    <button onclick="resetToStart()" title="重置到第一步" class="col-span-2 py-2.5 px-2 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-1 transition">
+                        <span>⏮</span> <span class="hidden sm:inline">重置</span>
+                    </button>
+
+                    <button onclick="prevStep()" id="btn-prev" title="快捷键: 左方向键 ←" class="col-span-3 py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-100 border border-slate-700 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition">
+                        <span>⬅️</span> 上一步
+                    </button>
+
+                    <button onclick="nextStep()" id="btn-next" title="快捷键: 空格键 或 右方向键 →" class="col-span-4 py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-sm sm:text-base font-bold flex items-center justify-center gap-2 transition btn-primary-glow">
+                        <span>▶️</span> 下一步 / 继续
+                    </button>
+
+                    <button onclick="toggleAutoPlay()" id="btn-autoplay" class="col-span-3 py-2.5 px-3 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 transition">
+                        <span id="autoplay-icon">⚡</span> <span id="autoplay-text">自动播</span>
+                    </button>
+                </div>
+
+                <!-- 快捷跳过辅助按钮与速度调节 -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-xs">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400">快捷跳步:</span>
+                        <button onclick="stepToNextMove()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 transition">
+                            💿 跳到下一次搬盘子
+                        </button>
+                        <button onclick="stepOutCurrentFrame()" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition">
+                            📤 跳出当前层递归
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-slate-400">自动速度:</span>
+                        <select id="speed-select" onchange="updateSpeed(this.value)" class="bg-slate-800 text-slate-200 rounded px-2 py-1 border border-slate-700 text-xs focus:outline-none">
+                            <option value="1200">慢速 (1.2秒/步)</option>
+                            <option value="700" selected>中速 (0.7秒/步)</option>
+                            <option value="300">快速 (0.3秒/步)</option>
+                            <option value="100">极速 (0.1秒/步)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 右侧栏：当前递归内部正在执行的代码与状态 (占 4 列) -->
+        <section class="lg:col-span-4 bg-slate-900 rounded-xl border border-slate-800 flex flex-col overflow-hidden shadow-lg">
+            <div class="bg-slate-800/70 px-3.5 py-2.5 border-b border-slate-700/80 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-400/80"></span>
+                    <h2 class="text-sm font-bold text-white">右边：当前递归层内部代码与进度</h2>
+                </div>
+                <span id="right-panel-frame-badge" class="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono-code font-semibold">
+                    主程序入口
+                </span>
+            </div>
+
+            <!-- 关键心法提示 -->
+            <div class="px-3.5 py-2 bg-indigo-950/40 border-b border-indigo-500/20 text-xs text-indigo-200 leading-snug">
+                💡 <strong>告别脑细胞烧死：</strong>下面把当前层抽象的 <code class="font-mono-code text-emerald-300">n, source, aux, target</code> <strong>全部替换成了这一层真实的柱子字母</strong>，并实时标记执行到了哪一行！
+            </div>
+
+            <!-- 当前层局部变量映射表 -->
+            <div id="active-frame-vars-bar" class="px-3.5 py-2 bg-slate-950/70 border-b border-slate-800 grid grid-cols-4 gap-1.5 text-center text-xs">
+                <!-- 由 JS 动态渲染 n, source, aux, target 四个变量卡片 -->
+            </div>
+
+            <!-- 当前递归帧内部代码动态代入视图 -->
+            <div id="active-frame-code-container" class="flex-1 overflow-y-auto p-3 space-y-2.5">
+                <!-- 由 JS 动态渲染当前递归层内部代入数值后的代码和每行打勾状态 -->
+            </div>
+
+            <!-- 底部：上一层（父级调用者）是谁？正在哪一行苦苦等待？ -->
+            <div id="parent-frame-summary" class="p-3 bg-slate-950/80 border-t border-slate-800 text-xs">
+                <!-- 由 JS 动态渲染父栈帧信息 -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 汉诺塔核心原理弹窗 Modal -->
+    <div id="help-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 text-slate-200 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <span>💡</span> 三分钟彻底搞懂：汉诺塔递归为什么这么写？
+                </h3>
+                <button onclick="toggleHelpModal()" class="text-slate-400 hover:text-white text-xl font-bold px-2">✕</button>
+            </div>
+            <div class="space-y-3 text-sm leading-relaxed">
+                <div class="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30">
+                    <h4 class="font-bold text-emerald-300 mb-1">1. 甩手掌柜的三步曲（不管 n 有多大，永远只有这 3 步）</h4>
+                    <p class="text-slate-300">
+                        要把 <code class="font-mono-code text-emerald-300">n</code> 个盘子从 <strong>起始柱(source)</strong> 搬到 <strong>目标柱(target)</strong>：<br>
+                        • <strong>第 4 行（第一步）：</strong> 喊小弟把压在上面的 <code class="font-mono-code">n-1</code> 个小盘子，先从 <strong>source</strong> 挪到 <strong>辅助柱(aux)</strong> 暂存。<br>
+                        • <strong>第 5 行（第二步）：</strong> 此时最大的第 <code class="font-mono-code">n</code> 号底盘终于露出来了！自己亲手把第 <code class="font-mono-code">n</code> 号盘从 <strong>source</strong> 搬到 <strong>target</strong>。<br>
+                        • <strong>第 6 行（第三步）：</strong> 再喊小弟把刚才暂存在 <strong>aux</strong> 上的那 <code class="font-mono-code">n-1</code> 个盘子，从 <strong>aux</strong> 搬到 <strong>target</strong> 摞上去！
+                    </p>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-amber-950/40 border border-amber-500/30">
+                    <h4 class="font-bold text-amber-300 mb-1">2. 为什么传参时 A、B、C 的顺序变来变去？</h4>
+                    <p class="text-slate-300">
+                        函数定义固定是 <code class="font-mono-code text-amber-300">def hanoi(n, 起点, 辅助, 终点):</code>。<br>
+                        • 在<strong>第 4 行</strong>，我们要把上面 <code class="font-mono-code">n-1</code> 个盘子<strong>移到辅助柱 <code class="font-mono-code">aux</code></strong>，所以对于小弟来说，<code class="font-mono-code">aux</code> 变成了它的<strong>终点</strong>，而原本的 <code class="font-mono-code">target</code> 变成了它的<strong>辅助中转柱</strong>！因此写成 <code class="font-mono-code">hanoi(n-1, source, target, aux)</code>。<br>
+                        • 在<strong>第 6 行</strong>，我们要把暂存在 <code class="font-mono-code">aux</code> 的 <code class="font-mono-code">n-1</code> 个盘子<strong>移到目标柱 <code class="font-mono-code">target</code></strong>，所以对于小弟来说，<code class="font-mono-code">aux</code> 是它的<strong>起点</strong>！因此写成 <code class="font-mono-code">hanoi(n-1, aux, source, target)</code>。
+                    </p>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-blue-950/40 border border-blue-500/30">
+                    <h4 class="font-bold text-blue-300 mb-1">3. 盯着右侧面板和上方调用栈看！</h4>
+                    <p class="text-slate-300">
+                        和分形树一模一样：每次在第 4 行呼叫子函数，当前层就在<strong>第 4 行按下暂停键</strong>；等子函数出栈回来后，它才执行<strong>第 5 行真正搬动大盘子</strong>；接着又在<strong>第 6 行按下暂停键</strong>去搬剩下的盘子！
+                    </p>
+                </div>
+            </div>
+            <div class="pt-2 flex justify-end">
+                <button onclick="toggleHelpModal()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition">
+                    彻底懂了，开始单步调试！
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 原始 Python 代码定义 (标准教材版汉诺塔代码)
+        // ==========================================
+        const RAW_CODE_LINES = [
+            { line: 1,  code: "def hanoi(n, source, aux, target):", comment: "# n个盘: 从source经aux移到target" },
+            { line: 2,  code: "    if n == 0:", comment: "# 基本结束条件：没有盘子需要移动" },
+            { line: 3,  code: "        return", comment: "# 直接返回上一层" },
+            { line: 4,  code: "    hanoi(n - 1, source, target, aux)", comment: "# 递归1: 将上面n-1个盘移到辅助柱aux" },
+            { line: 5,  code: "    print(f'盘 {n}: {source} -> {target}')", comment: "# 核心动作: 将第n号底盘移到目标柱target" },
+            { line: 6,  code: "    hanoi(n - 1, aux, source, target)", comment: "# 递归2: 将aux上的n-1个盘移到目标柱target" },
+            { line: 7,  code: "", comment: "" },
+            { line: 8,  code: "# --- 主程序调用入口 ---", comment: "" },
+            { line: 9,  code: "hanoi(3, 'A', 'B', 'C')", comment: "# 将3个盘子从A柱借助B柱移到C柱" },
+            { line: 10, code: "print('全部移动完成！')", comment: "" }
+        ];
+
+        // 盘子配色方案 (1号最小 ~ 4号最大)
+        const DISK_STYLES = {
+            1: { bg: '#f43f5e', border: '#fda4af', name: '1号盘(最小)' },
+            2: { bg: '#f59e0b', border: '#fcd34d', name: '2号盘(中)' },
+            3: { bg: '#10b981', border: '#6ee7b7', name: '3号盘(大)' },
+            4: { bg: '#3b82f6', border: '#93c5fd', name: '4号盘(最大)' }
+        };
+
+        // ==========================================
+        // 2. 全局状态与仿真步骤生成器
+        // ==========================================
+        let initialDiskCount = 3;
+        let steps = [];
+        let currentStepIndex = 0;
+        let autoPlayTimer = null;
+        let autoPlayInterval = 700;
+
+        function cloneState(obj) {
+            return JSON.parse(JSON.stringify(obj));
+        }
+
+        /**
+         * 生成从主程序调用到递归全部结束的完整单步执行快照序列
+         */
+        function generateSimulationSteps(numDisks) {
+            const trace = [];
+
+            // 初始柱子状态：A柱从底到顶依次放 numDisks ... 2, 1
+            const pegs = { A: [], B: [], C: [] };
+            for (let d = numDisks; d >= 1; d--) {
+                pegs.A.push(d);
+            }
+
+            const callStack = [];
+            const moveLogs = [];
+            let frameIdCounter = 1;
+
+            function recordStep({
+                line,
+                phaseTag,
+                explanation,
+                actionType = 'normal', // 'init' | 'call' | 'check' | 'return' | 'call_step1' | 'return_step1' | 'move' | 'call_step3' | 'return_step3' | 'done'
+                moveMeta = null
+            }) {
+                trace.push({
+                    stepNum: trace.length,
+                    line,
+                    phaseTag,
+                    explanation,
+                    actionType,
+                    moveMeta: moveMeta ? cloneState(moveMeta) : null,
+                    pegs: cloneState(pegs),
+                    callStack: cloneState(callStack),
+                    moveLogs: cloneState(moveLogs)
+                });
+            }
+
+            // Step 0: 主程序准备启动 (第 9 行)
+            recordStep({
+                line: 9,
+                phaseTag: "启动主程序",
+                explanation: `第 9 行：准备调用 <code class="text-emerald-300 font-mono-code font-bold">hanoi(${numDisks}, 'A', 'B', 'C')</code>。总目标是将 <strong>A柱</strong> 上的 ${numDisks} 个盘子，借助 <strong>B柱</strong> 全部搬到 <strong>C柱</strong>。`,
+                actionType: 'init'
+            });
+
+            function simulateHanoi(n, source, aux, target, depth, purposeDesc) {
+                const frameId = frameIdCounter++;
+                const frame = {
+                    id: frameId,
+                    n,
+                    source,
+                    aux,
+                    target,
+                    depth,
+                    purposeDesc,
+                    currentLine: 1,
+                    statusMap: {
+                        2: 'pending',
+                        3: 'pending',
+                        4: 'pending',
+                        5: 'pending',
+                        6: 'pending'
+                    }
+                };
+                callStack.push(frame);
+
+                // Step: 进入函数第 1 行
+                frame.currentLine = 1;
+                recordStep({
+                    line: 1,
+                    phaseTag: `进入第 ${depth} 层递归`,
+                    explanation: `进入 <code class="text-emerald-300 font-mono-code font-bold">hanoi(${n}, '${source}', '${aux}', '${target}')</code>（${purposeDesc}）。<br>👉 在这一层眼里：起点是 <strong>${source}柱</strong>，辅助是 <strong>${aux}柱</strong>，终点是 <strong>${target}柱</strong>。`,
+                    actionType: 'call'
+                });
+
+                // Step: 第 2 行判断 if n == 0
+                frame.currentLine = 2;
+                frame.statusMap[2] = 'done';
+
+                if (n === 0) {
+                    // 触发递归基线条件
+                    frame.currentLine = 3;
+                    frame.statusMap[3] = 'done';
+                    recordStep({
+                        line: 3,
+                        phaseTag: "⚡ 触底反弹 (n==0)",
+                        explanation: `第 2~3 行：判断发现 <code class="text-rose-300 font-mono-code font-bold">n == 0</code>（没有盘子需要搬）！满足递归结束条件，直接执行 <code class="text-rose-300 font-mono-code">return</code> 销毁当前层，返回上一层！`,
+                        actionType: 'return'
+                    });
+                    callStack.pop();
+                    return;
+                }
+
+                recordStep({
+                    line: 2,
+                    phaseTag: `条件判断 (n=${n}>0)`,
+                    explanation: `第 2 行：当前 <code class="text-emerald-300 font-mono-code font-bold">n = ${n}</code>（不等于 0），说明有盘子要搬，跳过第 3 行，继续往下执行三步曲（第 4、5、6 行）。`,
+                    actionType: 'check'
+                });
+
+                // Step: 第 4 行 递归调用把 n-1 从 source 移到 aux
+                frame.currentLine = 4;
+                frame.statusMap[4] = 'waiting';
+                recordStep({
+                    line: 4,
+                    phaseTag: "⏸ 暂停并外包第一步",
+                    explanation: `第 4 行：为了让最底下的 <strong>${n}号盘</strong> 露出来，必须先把压在它上面的 <strong>${n - 1} 个盘子</strong> 从 <strong>${source}柱</strong> 移到辅助 <strong>${aux}柱</strong>。<br>👉 <strong>当前层停在第 4 行等待</strong>，压栈呼叫 <code class="text-amber-300 font-mono-code font-bold">hanoi(${n - 1}, '${source}', '${target}', '${aux}')</code>！`,
+                    actionType: 'call_step1'
+                });
+
+                simulateHanoi(
+                    n - 1,
+                    source,
+                    target,
+                    aux,
+                    depth + 1,
+                    `帮 n=${n} 把上面 ${n - 1} 个盘从 ${source} 移走暂存到 ${aux}`
+                );
+
+                // 从第 4 行子递归返回
+                frame.currentLine = 4;
+                frame.statusMap[4] = 'done';
+                recordStep({
+                    line: 4,
+                    phaseTag: "🔙 第一步子任务完成",
+                    explanation: `🎉 第 4 行的子任务 <code class="text-emerald-300 font-mono-code">hanoi(${n - 1}, '${source}', '${target}', '${aux}')</code> 执行完毕出栈！<br>控制权<strong>回到 <code class="text-emerald-300 font-mono-code font-bold">hanoi(${n}, '${source}', '${aux}', '${target}')</code> 的第 4 行</strong>，接下来往下走第 5 行！`,
+                    actionType: 'return_step1'
+                });
+
+                // Step: 第 5 行 真正物理移动第 n 号盘子 (source -> target)
+                frame.currentLine = 5;
+                const movedDisk = pegs[source].pop();
+                pegs[target].push(movedDisk);
+                frame.statusMap[5] = 'done';
+
+                const logEntry = {
+                    stepIndex: moveLogs.length + 1,
+                    disk: n,
+                    from: source,
+                    to: target,
+                    text: `盘 ${n}: ${source} ➔ ${target}`
+                };
+                moveLogs.push(logEntry);
+
+                recordStep({
+                    line: 5,
+                    phaseTag: `💿 搬动 ${n} 号盘 (${source}➔${target})`,
+                    explanation: `第 5 行：<strong>核心物理移动！</strong> 压在上面的盘子已经移开了，现在亲手把 <strong>${n}号盘</strong> 从 <strong>${source}柱</strong> 搬到目标 <strong>${target}柱</strong>！`,
+                    actionType: 'move',
+                    moveMeta: { disk: n, from: source, to: target, moveNumber: moveLogs.length }
+                });
+
+                // Step: 第 6 行 递归调用把 n-1 从 aux 移到 target
+                frame.currentLine = 6;
+                frame.statusMap[6] = 'waiting';
+                recordStep({
+                    line: 6,
+                    phaseTag: "⏸ 暂停并外包第三步",
+                    explanation: `第 6 行：<strong>${n}号盘</strong> 已经在 <strong>${target}柱</strong> 就位了！现在要把刚才暂存在 <strong>${aux}柱</strong> 上的 <strong>${n - 1} 个盘子</strong> 搬到 <strong>${target}柱</strong> 摞起来。<br>👉 <strong>当前层停在第 6 行等待</strong>，压栈呼叫 <code class="text-blue-300 font-mono-code font-bold">hanoi(${n - 1}, '${aux}', '${source}', '${target}')</code>！`,
+                    actionType: 'call_step3'
+                });
+
+                simulateHanoi(
+                    n - 1,
+                    aux,
+                    source,
+                    target,
+                    depth + 1,
+                    `帮 n=${n} 把暂存在 ${aux} 的 ${n - 1} 个盘归位到 ${target}`
+                );
+
+                // 从第 6 行子递归返回，当前帧全部完成
+                frame.currentLine = 6;
+                frame.statusMap[6] = 'done';
+                recordStep({
+                    line: 6,
+                    phaseTag: "🔙 本层任务全部圆满完成",
+                    explanation: `🎉 第 6 行的子任务也执行完毕返回！至此，<code class="text-emerald-300 font-mono-code font-bold">hanoi(${n}, '${source}', '${aux}', '${target}')</code> 的第 4、5、6 行全部走完，当前层即将出栈返回上一层！`,
+                    actionType: 'return_step3'
+                });
+
+                callStack.pop();
+            }
+
+            simulateHanoi(numDisks, 'A', 'B', 'C', 1, `总任务：把 ${numDisks} 个盘从 A 移到 C`);
+
+            // Step Final: 回到主程序第 10 行
+            recordStep({
+                line: 10,
+                phaseTag: "🎉 汉诺塔全部完成",
+                explanation: `第 10 行：最外层 <code class="text-emerald-300 font-mono-code">hanoi(${numDisks}, 'A', 'B', 'C')</code> 出栈完毕！共经历 <strong>${moveLogs.length}</strong> 次盘子移动（$2^{${numDisks}} - 1 = ${moveLogs.length}$），所有盘子完美移至 C 柱！`,
+                actionType: 'done'
+            });
+
+            return trace;
+        }
+
+        // ==========================================
+        // 3. 界面渲染逻辑
+        // ==========================================
+
+        /**
+         * 3.1 渲染顶部【调用栈顺序】
+         */
+        function renderCallStack(step) {
+            const container = document.getElementById('call-stack-container');
+            const stack = step.callStack;
+
+            if (!stack || stack.length === 0) {
+                container.innerHTML = `
+                    <div class="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
+                        <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                        <span>主程序全局作用域 (当前正在执行第 <strong>${step.line}</strong> 行，尚未进入或已退出 <code class="font-mono-code text-emerald-300">hanoi()</code> 递归栈)</span>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div class="shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-800/90 border border-slate-700 text-[11px] text-slate-400 flex flex-col justify-center">
+                    <div class="font-mono-code font-semibold text-slate-300">主程序</div>
+                    <div>第9行调用</div>
+                </div>
+                <span class="text-slate-600 font-bold text-sm shrink-0">➔</span>
+            `;
+
+            stack.forEach((frame, idx) => {
+                const isTop = idx === stack.length - 1;
+                let cardStyle = '';
+                let statusBadge = '';
+
+                if (isTop) {
+                    if (step.actionType === 'return') {
+                        cardStyle = 'bg-rose-950/80 border-rose-500 text-rose-100 stack-card-active';
+                        statusBadge = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/30 text-rose-200">⚡ n==0 触底返回</span>`;
+                    } else if (step.actionType === 'move') {
+                        cardStyle = 'bg-emerald-950/95 border-emerald-400 text-emerald-100 stack-card-active';
+                        statusBadge = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold">💿 第5行: 搬动${frame.n}号盘</span>`;
+                    } else {
+                        cardStyle = 'bg-emerald-950/90 border-emerald-400 text-emerald-100 stack-card-active';
+                        statusBadge = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/30 text-emerald-200">👉 正在执行第 ${frame.currentLine} 行</span>`;
+                    }
+                } else {
+                    if (frame.currentLine === 4) {
+                        cardStyle = 'bg-amber-950/40 border-amber-500/60 text-amber-200/90';
+                        statusBadge = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">⏸ 停在第4行(等上层移走)</span>`;
+                    } else if (frame.currentLine === 6) {
+                        cardStyle = 'bg-blue-950/40 border-blue-500/60 text-blue-200/90';
+                        statusBadge = `<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">⏸ 停在第6行(等上层归位)</span>`;
+                    } else {
+                        cardStyle = 'bg-slate-800 border-slate-700 text-slate-300';
+                        statusBadge = `<span class="text-[10px] text-slate-400">第 ${frame.currentLine} 行</span>`;
+                    }
+                }
+
+                html += `
+                    <div class="stack-card shrink-0 px-3 py-1.5 rounded-xl border ${cardStyle} flex flex-col gap-1 min-w-[175px]">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-mono-code font-bold text-xs sm:text-[13px]">hanoi(${frame.n}, '${frame.source}', '${frame.aux}', '${frame.target}')</span>
+                            <span class="text-[10px] opacity-75">第${frame.depth}层</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            ${statusBadge}
+                        </div>
+                    </div>
+                `;
+
+                if (!isTop) {
+                    html += `<span class="text-slate-500 font-bold text-sm shrink-0">➔</span>`;
+                }
+            });
+
+            container.innerHTML = html;
+            container.scrollLeft = container.scrollWidth;
+        }
+
+        /**
+         * 3.2 渲染左侧【完整代码视图】与【移动日志】
+         */
+        function renderFullCode(step) {
+            const container = document.getElementById('full-code-container');
+            const activeLine = step.line;
+            const stack = step.callStack || [];
+
+            let waitingAtLine4 = [];
+            let waitingAtLine6 = [];
+            stack.slice(0, -1).forEach(f => {
+                if (f.currentLine === 4) waitingAtLine4.push(`n=${f.n}`);
+                if (f.currentLine === 6) waitingAtLine6.push(`n=${f.n}`);
+            });
+
+            let html = '';
+            RAW_CODE_LINES.forEach(item => {
+                const isCurrent = item.line === activeLine;
+                let rowClass = 'code-line px-3 py-1 flex items-center justify-between gap-2 border-l-4 border-transparent ';
+
+                if (isCurrent) {
+                    if (step.actionType === 'return') {
+                        rowClass += 'line-return font-semibold text-white';
+                    } else {
+                        rowClass += 'line-active font-semibold text-white';
+                    }
+                } else if (item.line === 4 && waitingAtLine4.length > 0) {
+                    rowClass += 'line-waiting-step1 text-slate-200';
+                } else if (item.line === 6 && waitingAtLine6.length > 0) {
+                    rowClass += 'line-waiting-step3 text-slate-200';
+                } else {
+                    rowClass += 'text-slate-300 hover:bg-slate-800/40';
+                }
+
+                let coloredCode = item.code
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/\b(def|if|return|print)\b/g, '<span class="text-purple-400 font-semibold">$1</span>')
+                    .replace(/\b(hanoi)\b/g, '<span class="text-amber-300 font-semibold">$1</span>')
+                    .replace(/('A'|'B'|'C')/g, '<span class="text-emerald-300">$1</span>');
+
+                let rightBadge = '';
+                if (isCurrent) {
+                    rightBadge = `<span class="shrink-0 text-[11px] px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold shadow">👈 正在执行</span>`;
+                } else if (item.line === 4 && waitingAtLine4.length > 0) {
+                    rightBadge = `<span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">⏸ 父层(${waitingAtLine4.join(',')})在此等</span>`;
+                } else if (item.line === 6 && waitingAtLine6.length > 0) {
+                    rightBadge = `<span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40">⏸ 父层(${waitingAtLine6.join(',')})在此等</span>`;
+                } else if (item.line === 9 && stack.length > 0) {
+                    rightBadge = `<span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">⏸ 主程序等待</span>`;
+                }
+
+                html += `
+                    <div class="${rowClass}">
+                        <div class="flex items-center min-w-0">
+                            <span class="w-6 shrink-0 text-right pr-2.5 text-slate-500 select-none text-[11px]">${item.line}</span>
+                            <pre class="whitespace-pre font-mono-code truncate"><code>${coloredCode}</code> <span class="text-slate-500 text-[11px]">${item.comment}</span></pre>
+                        </div>
+                        ${rightBadge}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+            // 渲染左下角移动日志
+            const logContainer = document.getElementById('move-log-container');
+            const totalMoves = Math.pow(2, initialDiskCount) - 1;
+            document.getElementById('move-count-badge').textContent = `已移动: ${step.moveLogs.length} / ${totalMoves} 步`;
+
+            if (step.moveLogs.length === 0) {
+                logContainer.innerHTML = `<div class="text-slate-500 text-xs py-4 text-center">暂无盘子移动（当前正在递归分解压栈中...）</div>`;
+            } else {
+                logContainer.innerHTML = step.moveLogs.map((log, i) => {
+                    const isLatest = i === step.moveLogs.length - 1 && step.actionType === 'move';
+                    const diskColor = DISK_STYLES[log.disk]?.bg || '#10b981';
+                    return `
+                        <div class="px-2.5 py-1 rounded flex items-center justify-between ${isLatest ? 'bg-emerald-500/20 border border-emerald-500/40 text-white font-bold' : 'bg-slate-900/80 text-slate-300'}">
+                            <div class="flex items-center gap-2">
+                                <span class="text-slate-500 text-[11px]">#${log.stepIndex}</span>
+                                <span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${diskColor}"></span>
+                                <span>盘 ${log.disk}: <strong>${log.from}柱</strong> ➔ <strong>${log.to}柱</strong></span>
+                            </div>
+                            ${isLatest ? '<span class="text-[10px] text-emerald-300">✨ 刚刚移动</span>' : ''}
+                        </div>
+                    `;
+                }).join('');
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+
+        /**
+         * 3.3 渲染右侧【当前递归内部正在执行的代码与真实参数代入】
+         */
+        function renderActiveFrameCode(step) {
+            const varsBar = document.getElementById('active-frame-vars-bar');
+            const container = document.getElementById('active-frame-code-container');
+            const badge = document.getElementById('right-panel-frame-badge');
+            const parentSummary = document.getElementById('parent-frame-summary');
+            const stack = step.callStack || [];
+
+            if (stack.length === 0) {
+                badge.textContent = "主程序入口 / 结束";
+                badge.className = "text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono-code";
+                varsBar.innerHTML = `
+                    <div class="col-span-4 text-slate-400 py-1">当前在主程序（第 ${step.line} 行），尚未进入递归栈帧</div>
+                `;
+                container.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-3">
+                        <div class="text-3xl">🗼</div>
+                        <div class="text-sm font-semibold text-slate-200">准备启动汉诺塔递归</div>
+                        <p class="text-xs leading-relaxed max-w-xs">
+                            点击「下一步」，进入 <code class="text-emerald-300 font-mono-code">hanoi(${initialDiskCount}, 'A', 'B', 'C')</code>，这里将为你实时替换每一层真实的 <code class="font-mono-code">source, aux, target</code> 柱子名称！
+                        </p>
+                    </div>
+                `;
+                parentSummary.innerHTML = `<span class="text-slate-400">当前处于最外层主程序，无外层父调用。</span>`;
+                return;
+            }
+
+            const topFrame = stack[stack.length - 1];
+            const { n, source, aux, target, depth } = topFrame;
+            const isBaseCase = n === 0;
+
+            badge.textContent = `当前层: hanoi(${n}, '${source}', '${aux}', '${target}')`;
+            badge.className = "text-xs px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono-code font-bold";
+
+            // 渲染顶部四个局部变量角色卡片
+            varsBar.innerHTML = `
+                <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+                    <div class="text-[10px] text-slate-400">盘数 n</div>
+                    <div class="font-mono-code font-bold text-sm text-amber-300">${n}</div>
+                </div>
+                <div class="bg-slate-900 p-1.5 rounded border border-emerald-500/30">
+                    <div class="text-[10px] text-emerald-400">起点 source</div>
+                    <div class="font-mono-code font-bold text-sm text-white">'${source}'柱</div>
+                </div>
+                <div class="bg-slate-900 p-1.5 rounded border border-amber-500/30">
+                    <div class="text-[10px] text-amber-400">辅助 aux</div>
+                    <div class="font-mono-code font-bold text-sm text-white">'${aux}'柱</div>
+                </div>
+                <div class="bg-slate-900 p-1.5 rounded border border-sky-500/30">
+                    <div class="text-[10px] text-sky-400">终点 target</div>
+                    <div class="font-mono-code font-bold text-sm text-white">'${target}'柱</div>
+                </div>
+            `;
+
+            const frameLines = [
+                {
+                    line: 1,
+                    raw: `def hanoi(n=${n}, source='${source}', aux='${aux}', target='${target}'):`,
+                    desc: `${topFrame.purposeDesc}`,
+                    status: 'header'
+                },
+                {
+                    line: 2,
+                    raw: `    if ${n} == 0:  # 结果: ${n === 0 ? 'True (成立!)' : 'False (不成立)'}`,
+                    desc: n === 0 ? '⚡ 没有盘子要移动，直接进第 3 行 return！' : `n=${n} 大于 0，跳过 return，执行下面三步曲`,
+                    status: topFrame.statusMap[2]
+                },
+                {
+                    line: 3,
+                    raw: `        return`,
+                    desc: `直接结束当前层，返回上一层调用处`,
+                    status: isBaseCase ? topFrame.statusMap[3] : 'skipped'
+                },
+                {
+                    line: 4,
+                    raw: `    hanoi(${n - 1}, '${source}', '${target}', '${aux}')`,
+                    desc: `第一步：把上面 ${n - 1} 个盘从 ${source}柱 移到辅助 ${aux}柱`,
+                    status: isBaseCase ? 'skipped' : topFrame.statusMap[4]
+                },
+                {
+                    line: 5,
+                    raw: `    print('盘 ${n}: ${source} -> ${target}')`,
+                    desc: `第二步(核心)：亲手把第 ${n} 号底盘从 ${source}柱 搬到目标 ${target}柱`,
+                    status: isBaseCase ? 'skipped' : topFrame.statusMap[5]
+                },
+                {
+                    line: 6,
+                    raw: `    hanoi(${n - 1}, '${aux}', '${source}', '${target}')`,
+                    desc: `第三步：把暂存在 ${aux}柱 的 ${n - 1} 个盘搬到目标 ${target}柱`,
+                    status: isBaseCase ? 'skipped' : topFrame.statusMap[6]
+                }
+            ];
+
+            let html = '';
+            frameLines.forEach(item => {
+                const isCurrentLine = topFrame.currentLine === item.line;
+                let boxClass = 'p-2.5 rounded-lg border text-xs transition flex flex-col gap-1 ';
+                let statusTag = '';
+
+                if (item.status === 'header') {
+                    boxClass += 'bg-slate-800/90 border-slate-700 text-emerald-300 font-bold';
+                    statusTag = `<span class="text-[10px] font-normal px-2 py-0.5 rounded bg-slate-700 text-slate-200">第${depth}层</span>`;
+                } else if (item.status === 'skipped') {
+                    boxClass += 'bg-slate-900/40 border-slate-800/60 text-slate-600 line-through opacity-55';
+                    statusTag = `<span class="text-[10px] text-slate-600">🚫 本层跳过不执行</span>`;
+                } else if (isCurrentLine) {
+                    if (step.actionType === 'return') {
+                        boxClass += 'bg-rose-950/60 border-rose-500 text-rose-100 shadow-md';
+                        statusTag = `<span class="text-[11px] font-bold px-2 py-0.5 rounded bg-rose-500 text-white">⚡ 触底返回上一层</span>`;
+                    } else {
+                        boxClass += 'bg-emerald-950/70 border-emerald-400 text-white shadow-md';
+                        statusTag = `<span class="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500 text-slate-950">👉 正在执行这一步</span>`;
+                    }
+                } else if (item.status === 'done') {
+                    boxClass += 'bg-slate-800/40 border-emerald-500/20 text-slate-300';
+                    statusTag = `<span class="text-[10px] text-emerald-400 font-semibold">✓ 本层已执行完</span>`;
+                } else {
+                    boxClass += 'bg-slate-900/70 border-slate-800 text-slate-400';
+                    statusTag = `<span class="text-[10px] text-slate-500">· 排队等待执行</span>`;
+                }
+
+                html += `
+                    <div class="${boxClass}">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="text-[11px] font-mono-code text-slate-500 w-5">L${item.line}</span>
+                                <code class="font-mono-code text-xs sm:text-[13px] truncate">${item.raw}</code>
+                            </div>
+                            ${statusTag}
+                        </div>
+                        ${item.status !== 'skipped' ? `
+                            <div class="pl-7 text-[11px] ${isCurrentLine ? 'text-emerald-200 font-medium' : 'text-slate-400'}">
+                                ${item.desc}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+
+            // 渲染底部父调用栈提示
+            if (stack.length >= 2) {
+                const parentFrame = stack[stack.length - 2];
+                const waitLine = parentFrame.currentLine;
+                const waitDesc = waitLine === 4
+                    ? `第 4 行 (等待把上面盘子移走，好执行第 5 行搬 ${parentFrame.n} 号盘)`
+                    : `第 6 行 (等待把暂存盘归位，完成后也将结束出栈)`;
+                parentSummary.innerHTML = `
+                    <div class="flex flex-col gap-1">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400">🔙 <strong>当前层结束后回到哪？</strong></span>
+                            <span class="text-amber-300 font-mono-code font-semibold">hanoi(${parentFrame.n}, '${parentFrame.source}', '${parentFrame.aux}', '${parentFrame.target}')</span>
+                        </div>
+                        <div class="text-slate-300 text-[11px]">唤醒位置：${waitDesc}</div>
+                    </div>
+                `;
+            } else {
+                parentSummary.innerHTML = `
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-slate-400">🔙 <strong>当前层结束后去哪？</strong></span>
+                        <span class="text-emerald-300 font-mono-code">返回主程序第 10 行 (整座汉诺塔移动完成)</span>
+                    </div>
+                `;
+            }
+        }
+
+        /**
+         * 3.4 渲染中间【汉诺塔画布 Canvas】
+         */
+        function renderCanvas(step) {
+            const canvas = document.getElementById('hanoi-canvas');
+            const wrapper = document.getElementById('canvas-wrapper');
+            const rect = wrapper.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const W = rect.width;
+            const H = rect.height;
+
+            // 深色网格背景
+            ctx.fillStyle = '#0b1120';
+            ctx.fillRect(0, 0, W, H);
+
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            const gridStep = 36;
+            for (let x = (W / 2) % gridStep; x < W; x += gridStep) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+            }
+            for (let y = (H / 2) % gridStep; y < H; y += gridStep) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            }
+
+            const stack = step.callStack || [];
+            const topFrame = stack.length > 0 ? stack[stack.length - 1] : null;
+            const showRoleTags = document.getElementById('toggle-role-tags').checked;
+
+            // 更新左上角 HUD
+            if (topFrame) {
+                document.getElementById('hud-call').textContent = `hanoi(${topFrame.n}, '${topFrame.source}', '${topFrame.aux}', '${topFrame.target}')`;
+                document.getElementById('hud-disk').textContent = topFrame.n > 0 ? `${topFrame.n} 号盘` : '无 (n=0 触底)';
+                document.getElementById('hud-direction').textContent = `${topFrame.source}柱 ➔ ${topFrame.target}柱 (借${topFrame.aux}柱)`;
+                document.getElementById('current-focus-disk').textContent = topFrame.n > 0 ? `本层目标: ${topFrame.n}号盘 (${topFrame.source}➔${topFrame.target})` : `当前层: n=0 (触底返回)`;
+            } else {
+                document.getElementById('hud-call').textContent = '主程序';
+                document.getElementById('hud-disk').textContent = '--';
+                document.getElementById('hud-direction').textContent = 'A柱 ➔ C柱';
+                document.getElementById('current-focus-disk').textContent = '主程序阶段';
+            }
+
+            // 柱子几何布局参数
+            const baseLineY = H - 64;
+            const pegHeight = Math.min(165, H * 0.52);
+            const pegTopY = baseLineY - pegHeight;
+            const pegNames = ['A', 'B', 'C'];
+            const pegXMap = {
+                A: W * 0.2,
+                B: W * 0.5,
+                C: W * 0.8
+            };
+
+            // 底座横梁
+            ctx.fillStyle = '#334155';
+            ctx.beginPath();
+            ctx.roundRect(W * 0.07, baseLineY, W * 0.86, 12, 6);
+            ctx.fill();
+
+            // 绘制三根柱子及动态角色标签
+            pegNames.forEach(pegName => {
+                const px = pegXMap[pegName];
+
+                // 柱杆
+                ctx.fillStyle = '#475569';
+                ctx.beginPath();
+                ctx.roundRect(px - 5, pegTopY, 10, pegHeight, [5, 5, 0, 0]);
+                ctx.fill();
+
+                // 柱子名称 A / B / C
+                ctx.font = 'bold 15px "JetBrains Mono", sans-serif';
+                ctx.fillStyle = '#f8fafc';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${pegName} 柱`, px, baseLineY + 28);
+
+                // 动态绘制当前递归帧里的角色牌 (source / aux / target)
+                if (showRoleTags && topFrame) {
+                    let roleText = '';
+                    let roleBg = '';
+                    let roleBorder = '';
+                    if (topFrame.source === pegName) {
+                        roleText = '起点 source';
+                        roleBg = 'rgba(16, 185, 129, 0.2)';
+                        roleBorder = '#10b981';
+                    } else if (topFrame.aux === pegName) {
+                        roleText = '辅助 aux';
+                        roleBg = 'rgba(245, 158, 11, 0.2)';
+                        roleBorder = '#f59e0b';
+                    } else if (topFrame.target === pegName) {
+                        roleText = '终点 target';
+                        roleBg = 'rgba(56, 189, 248, 0.2)';
+                        roleBorder = '#38bdf8';
+                    }
+
+                    if (roleText) {
+                        const tagW = 84;
+                        const tagH = 20;
+                        const tagX = px - tagW / 2;
+                        const tagY = baseLineY + 35;
+
+                        ctx.fillStyle = roleBg;
+                        ctx.strokeStyle = roleBorder;
+                        ctx.lineWidth = 1.2;
+                        ctx.beginPath();
+                        ctx.roundRect(tagX, tagY, tagW, tagH, 5);
+                        ctx.fill();
+                        ctx.stroke();
+
+                        ctx.font = 'bold 11px "Noto Sans SC", sans-serif';
+                        ctx.fillStyle = roleBorder;
+                        ctx.fillText(roleText, px, tagY + 14);
+                    }
+                }
+            });
+
+            // 绘制每个柱子上的圆盘
+            const diskHeight = 24;
+            const maxDiskWidth = Math.min(125, W * 0.26);
+            const minDiskWidth = 46;
+
+            pegNames.forEach(pegName => {
+                const px = pegXMap[pegName];
+                const disks = step.pegs[pegName] || [];
+
+                disks.forEach((diskNum, stackIdx) => {
+                    const widthRatio = (diskNum - 1) / Math.max(1, initialDiskCount - 1);
+                    const dWidth = initialDiskCount === 1
+                        ? 80
+                        : minDiskWidth + widthRatio * (maxDiskWidth - minDiskWidth);
+
+                    const dx = px - dWidth / 2;
+                    const dy = baseLineY - (stackIdx + 1) * (diskHeight + 3);
+
+                    const style = DISK_STYLES[diskNum] || DISK_STYLES[1];
+                    const isJustMoved = step.actionType === 'move' && step.moveMeta && step.moveMeta.disk === diskNum;
+                    const isCurrentFrameTargetDisk = topFrame && topFrame.n === diskNum;
+
+                    ctx.save();
+                    if (isJustMoved) {
+                        ctx.shadowColor = '#fbbf24';
+                        ctx.shadowBlur = 18;
+                    }
+
+                    ctx.fillStyle = style.bg;
+                    ctx.strokeStyle = isJustMoved ? '#ffffff' : (isCurrentFrameTargetDisk ? '#fde047' : style.border);
+                    ctx.lineWidth = isJustMoved ? 3 : (isCurrentFrameTargetDisk ? 2.2 : 1.5);
+
+                    ctx.beginPath();
+                    ctx.roundRect(dx, dy, dWidth, diskHeight, 8);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 盘子编号文字
+                    ctx.font = 'bold 12px "JetBrains Mono", monospace';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`盘 ${diskNum}`, px, dy + 16);
+                    ctx.restore();
+                });
+            });
+
+            // 如果当前步骤是第 5 行移动盘子，绘制醒目的空中移动轨迹弧线与箭头
+            if (step.actionType === 'move' && step.moveMeta) {
+                const { disk, from, to } = step.moveMeta;
+                const x1 = pegXMap[from];
+                const x2 = pegXMap[to];
+                const y1 = pegTopY - 12;
+                const y2 = pegTopY - 12;
+                const ctrlX = (x1 + x2) / 2;
+                const ctrlY = pegTopY - 62;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([6, 4]);
+                ctx.moveTo(x1, y1);
+                ctx.quadraticCurveTo(ctrlX, ctrlY, x2, y2);
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // 终点箭头圆点
+                ctx.setLineDash([]);
+                ctx.fillStyle = '#fbbf24';
+                ctx.beginPath();
+                ctx.arc(x2, y2, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 顶部文字标注
+                ctx.font = 'bold 13px "Noto Sans SC", sans-serif';
+                ctx.fillStyle = '#fde047';
+                ctx.textAlign = 'center';
+                ctx.fillText(`✨ 搬动 ${disk}号盘: ${from}柱 ➔ ${to}柱`, ctrlX, ctrlY + 18);
+                ctx.restore();
+            }
+        }
+
+        /**
+         * 3.5 综合渲染当前步骤
+         */
+        function renderAll() {
+            if (!steps || steps.length === 0) return;
+            const step = steps[currentStepIndex];
+
+            document.getElementById('step-badge').textContent = `步骤 ${currentStepIndex} / ${steps.length - 1}`;
+            document.getElementById('step-phase-tag').textContent = step.phaseTag;
+            document.getElementById('step-explanation-text').innerHTML = step.explanation;
+
+            const slider = document.getElementById('step-slider');
+            slider.max = steps.length - 1;
+            slider.value = currentStepIndex;
+            document.getElementById('slider-cur-label').textContent = currentStepIndex;
+            document.getElementById('slider-max-label').textContent = steps.length - 1;
+
+            document.getElementById('btn-prev').disabled = currentStepIndex === 0;
+            document.getElementById('btn-prev').classList.toggle('opacity-40', currentStepIndex === 0);
+
+            renderCallStack(step);
+            renderFullCode(step);
+            renderActiveFrameCode(step);
+            renderCanvas(step);
+        }
+
+        // ==========================================
+        // 4. 交互控制函数
+        // ==========================================
+        function nextStep() {
+            if (currentStepIndex < steps.length - 1) {
+                currentStepIndex++;
+                renderAll();
+            } else {
+                stopAutoPlay();
+            }
+        }
+
+        function prevStep() {
+            stopAutoPlay();
+            if (currentStepIndex > 0) {
+                currentStepIndex--;
+                renderAll();
+            }
+        }
+
+        function resetToStart() {
+            stopAutoPlay();
+            currentStepIndex = 0;
+            renderAll();
+        }
+
+        function onSliderChange(val) {
+            stopAutoPlay();
+            currentStepIndex = parseInt(val, 10);
+            renderAll();
+        }
+
+        // 跳到下一次物理搬盘子 (第5行)
+        function stepToNextMove() {
+            stopAutoPlay();
+            for (let i = currentStepIndex + 1; i < steps.length; i++) {
+                if (steps[i].actionType === 'move') {
+                    currentStepIndex = i;
+                    renderAll();
+                    return;
+                }
+            }
+            currentStepIndex = steps.length - 1;
+            renderAll();
+        }
+
+        // 跳出当前层递归
+        function stepOutCurrentFrame() {
+            stopAutoPlay();
+            const curStack = steps[currentStepIndex].callStack;
+            if (!curStack || curStack.length === 0) {
+                nextStep();
+                return;
+            }
+            const curFrameId = curStack[curStack.length - 1].id;
+            for (let i = currentStepIndex + 1; i < steps.length; i++) {
+                const st = steps[i].callStack;
+                const stillInStack = st.some(f => f.id === curFrameId);
+                if (!stillInStack) {
+                    currentStepIndex = i;
+                    renderAll();
+                    return;
+                }
+            }
+            currentStepIndex = steps.length - 1;
+            renderAll();
+        }
+
+        function toggleAutoPlay() {
+            if (autoPlayTimer) {
+                stopAutoPlay();
+            } else {
+                if (currentStepIndex >= steps.length - 1) {
+                    currentStepIndex = 0;
+                }
+                document.getElementById('autoplay-icon').textContent = '⏸';
+                document.getElementById('autoplay-text').textContent = '暂停';
+                autoPlayTimer = setInterval(() => {
+                    if (currentStepIndex < steps.length - 1) {
+                        currentStepIndex++;
+                        renderAll();
+                    } else {
+                        stopAutoPlay();
+                    }
+                }, autoPlayInterval);
+            }
+        }
+
+        function stopAutoPlay() {
+            if (autoPlayTimer) {
+                clearInterval(autoPlayTimer);
+                autoPlayTimer = null;
+            }
+            document.getElementById('autoplay-icon').textContent = '⚡';
+            document.getElementById('autoplay-text').textContent = '自动播';
+        }
+
+        function updateSpeed(ms) {
+            autoPlayInterval = parseInt(ms, 10);
+            if (autoPlayTimer) {
+                stopAutoPlay();
+                toggleAutoPlay();
+            }
+        }
+
+        function changeDiskCount(n) {
+            stopAutoPlay();
+            initialDiskCount = n;
+            [2, 3, 4].forEach(cnt => {
+                const btn = document.getElementById(`disk-btn-${cnt}`);
+                if (cnt === n) {
+                    btn.className = "px-2.5 py-1 rounded-md transition font-mono-code bg-emerald-600 text-white font-semibold shadow";
+                } else {
+                    btn.className = "px-2.5 py-1 rounded-md transition font-mono-code text-slate-300 hover:text-white";
+                }
+            });
+            RAW_CODE_LINES[8].code = `hanoi(${n}, 'A', 'B', 'C')`;
+            RAW_CODE_LINES[8].comment = `# 将${n}个盘子从A柱借助B柱移到C柱`;
+
+            steps = generateSimulationSteps(n);
+            currentStepIndex = 0;
+            renderAll();
+        }
+
+        function toggleHelpModal() {
+            const modal = document.getElementById('help-modal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+            if (e.code === 'ArrowRight' || e.code === 'Space') {
+                e.preventDefault();
+                nextStep();
+            } else if (e.code === 'ArrowLeft') {
+                e.preventDefault();
+                prevStep();
+            }
+        });
+
+        window.addEventListener('resize', () => {
+            renderAll();
+        });
+
+        window.onload = function () {
+            steps = generateSimulationSteps(initialDiskCount);
+            currentStepIndex = 0;
+            renderAll();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+	"nodes":[
+		{"id":"group_yield","type":"group","x":-40,"y":-100,"width":420,"height":520,"color":"3","label":"生成器函数: yield (暂停保留，原地复活)"},
+		{"id":"group_return","type":"group","x":-500,"y":-100,"width":360,"height":520,"color":"1","label":"普通函数: return (单次终结，下次重头来)"},
+		{"id":"r_start","type":"text","text":"进入函数","x":-440,"y":-30,"width":240,"height":60},
+		{"id":"r_step","type":"text","text":"执行代码语句","x":-440,"y":80,"width":240,"height":60},
+		{"id":"r_cond","type":"text","text":"遇到 return ?","x":-440,"y":190,"width":240,"height":70},
+		{"id":"r_end","type":"text","text":"结束并销毁环境\n(下次调用重新从头来)","x":-440,"y":310,"width":240,"height":80,"color":"1"},
+		{"id":"y_start","type":"text","text":"外部请求取值 (next)","x":20,"y":-30,"width":300,"height":60},
+		{"id":"y_step","type":"text","text":"执行当前语句段","x":20,"y":80,"width":300,"height":60},
+		{"id":"y_cond","type":"text","text":"遇到 yield ?","x":20,"y":190,"width":300,"height":70},
+		{"id":"y_pause","type":"text","text":"原地暂停\n(冻结状态，等待下次调用)","x":20,"y":310,"width":300,"height":80,"color":"3"}
+	],
+	"edges":[
+		{"id":"er1","fromNode":"r_start","fromSide":"bottom","toNode":"r_step","toSide":"top"},
+		{"id":"er2","fromNode":"r_step","fromSide":"bottom","toNode":"r_cond","toSide":"top"},
+		{"id":"er3","fromNode":"r_cond","fromSide":"bottom","toNode":"r_end","toSide":"top","label":"Yes"},
+		{"id":"ey1","fromNode":"y_start","fromSide":"bottom","toNode":"y_step","toSide":"top"},
+		{"id":"ey2","fromNode":"y_step","fromSide":"bottom","toNode":"y_cond","toSide":"top"},
+		{"id":"ey3","fromNode":"y_cond","fromSide":"bottom","toNode":"y_pause","toSide":"top","label":"Yes"},
+		{"id":"ey_loop","fromNode":"y_pause","fromSide":"right","toNode":"y_step","toSide":"right","color":"4","label":"下次调用: \n从原位继续！"}
+	]
+}
